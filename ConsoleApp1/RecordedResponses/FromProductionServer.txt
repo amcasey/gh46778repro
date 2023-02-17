@@ -1,0 +1,4 @@
+﻿HTTP/1.1 500 Internal Server Error
+Content-Length: 0
+Date: Fri, 17 Feb 2023 13:14:28 GMT
+Server: Kestrel
