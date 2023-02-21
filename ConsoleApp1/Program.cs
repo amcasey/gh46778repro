@@ -9,32 +9,9 @@ namespace ConsoleApp1
 {
     internal class Program
     {
-        private static EchoPayload _echoPayload = new EchoPayload
-        {
-            Message = "Hello from ConsoleApp1",
-            Details = new string('x', 1024 * 1)
-        };
-
-        private int count500 = 0;
-        private int countEmpty = 0;
-        private int countOther = 0;
-        
         public static void Main(string[] args)
         {
-            var count = 1;
-            bool corruptData = true;
-
-            if (args != null && args.Length > 0 && int.TryParse(args[0], out var parsedCount))
-            {
-                count = parsedCount;
-            }
-
-            if (args != null && args.Length > 1 && bool.TryParse(args[1], out var parsedCorruptData))
-            {
-                corruptData = parsedCorruptData; ;
-            }
-
-            //new Program().SendUnCorruptedRequest();
+            (var count, var corruptData) = ParseArgs(args);
             new Program().SendCorruptedRequest(count, corruptData);
         }
 
@@ -45,7 +22,13 @@ namespace ConsoleApp1
                 using (var client = new TcpClient("127.0.0.1", 7000))
                 {
                     // Create SSL stream object
-                    var sslStream = new SslStream(new MyCorruptingStreamWrapper(client.GetStream(), corruptData ? 1000 : null), false, (s, c, cc, ss) => true, null) { ReadTimeout = 50 };
+                    var sslStream = new SslStream(
+                        new MyCorruptingStreamWrapper(client.GetStream(), corruptData ? 1000 : null), 
+                        false, 
+                        (s, c, cc, ss) => true, null)
+                    { 
+                        ReadTimeout = 50 
+                    };
 
                     // Create SSL connection with server
                     try
@@ -59,19 +42,16 @@ namespace ConsoleApp1
                         return;
                     }
 
-                    // Send request to server over SSL connection
-                    ResourceFiles.Resources.LocalHttpRequest.Split('\n').ToList().ForEach(line =>
-                    {
-                        var trimmedLine = line.Trim('\r', '\n');
-                        Tracer.Verbose($"Sending ({trimmedLine.Length}): {trimmedLine}");
-                        sslStream.Write(Encoding.UTF8.GetBytes($"{trimmedLine}\r\n"));
-                        Thread.Sleep(1);
-                    });
-                    sslStream.Flush();
+                    // Write HTTP request
+                    WriteMessage(sslStream, ResourceFiles.Resources.LocalHttpRequest);
 
-                    // Read response from server
+                    // Read HTTP response
                     string serverMessage = ReadMessage(sslStream);
+
+                    // Analyze HTTP response
                     AnalyzeResponse(serverMessage);
+
+                    // Dump service response
                     Tracer.Info("");
                     Tracer.Info($"******************************************************************************************************************");
                     Tracer.Info($"Server response");
@@ -81,6 +61,7 @@ namespace ConsoleApp1
                 }
             }
 
+            // Dump statistics for all calls
             Tracer.Info("");
             Tracer.Info($"******************************************************************************************************************");
             Tracer.Info($"Final report");
@@ -106,6 +87,19 @@ namespace ConsoleApp1
             {
                 countOther++;
             }
+        }
+
+        private void WriteMessage(SslStream sslStream, string message)
+        {
+            message.Split('\n').ToList().ForEach(line =>
+            {
+                var trimmedLine = line.Trim('\r', '\n');
+                Tracer.Verbose($"Sending ({trimmedLine.Length}): {trimmedLine}");
+                sslStream.Write(Encoding.UTF8.GetBytes($"{trimmedLine}\r\n"));
+                Thread.Sleep(1);
+            });
+            sslStream.Flush();
+
         }
 
         private string ReadMessage(SslStream sslStream)
@@ -141,15 +135,52 @@ namespace ConsoleApp1
             return messageData.ToString();
         }
 
+        private static (int, bool) ParseArgs(string[] args)
+        {
+            var count = 1;
+            bool corruptData = true;
+
+            if (args != null)
+            {
+                if (args.Length > 0)
+                {
+                    count = int.Parse(args[0]);
+                }
+
+                if (args.Length > 1)
+                {
+                    corruptData = bool.Parse(args[1]);
+                }
+            }
+
+            return (count, corruptData);
+        }
+
+        /// <summary>
+        /// Sends well formed request to server (useful for Fiddler capture of stream contennts)
+        /// </summary>
         private void SendUnCorruptedRequest()
         {
             HttpClient httpClient = new HttpClient(new TracingHandler(new HttpClientHandler() { ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true }));
             var request = new HttpRequestMessage(HttpMethod.Post, "https://127.0.0.1:7000/echo");
             request.Content = new StringContent(JsonSerializer.Serialize(_echoPayload), Encoding.UTF8, "application/json");
+            
             var response = httpClient.Send(request, HttpCompletionOption.ResponseContentRead);
             Tracer.Info($"Response: {response.StatusCode}");
+            
             var content = response.Content.ReadAsStringAsync().Result;
             Tracer.Info($"Content: {content}");
         }
+
+        private static EchoPayload _echoPayload = new EchoPayload
+        {
+            Message = "Hello from ConsoleApp1",
+            Details = new string('x', 1024 * 1)
+        };
+
+        private int count500 = 0;
+        private int countEmpty = 0;
+        private int countOther = 0;
+
     }
 }
