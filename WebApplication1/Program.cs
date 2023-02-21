@@ -28,7 +28,7 @@ namespace WebApplication1
             //        if ((x.InnerException is System.ComponentModel.Win32Exception wx) && (wx.NativeErrorCode == unchecked((int)0x80090330)))
             //        {
             //                app.Logger.LogWarning($"Client encryption error detected!  Returning 400 to caller.");
-
+            //
             //                context.Response.StatusCode = StatusCodes.Status400BadRequest;
             //                context.Response.ContentType = "application/json";
             //                await context.Response.WriteAsync(JsonSerializer.Serialize(new { Code = $"TlsDecryption", Message = $"Could not decrypt client transmitted data" }));
