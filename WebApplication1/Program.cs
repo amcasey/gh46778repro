@@ -11,6 +11,18 @@ namespace WebApplication1
         {
             var builder = WebApplication.CreateBuilder(args);
             builder.Services.AddControllers();
+            builder.Services.AddHttpLogging(options => {
+                options.LoggingFields = Microsoft.AspNetCore.HttpLogging.HttpLoggingFields.All;
+            });
+
+            builder.WebHost.ConfigureKestrel((context, serverOptions) => {
+                serverOptions.ListenLocalhost(7000, listenOptions => {
+                    //listenOptions.UseConnectionLogging(); // Encrypted
+                    // listenOptions.UseHttps("/home/acasey/keys/localhost.p12", "mypass");
+                    listenOptions.UseHttps();
+                    listenOptions.UseConnectionLogging(); // Decrypted
+                });
+            });
 
             var app = builder.Build();
 

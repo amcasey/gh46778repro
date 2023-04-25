@@ -22,18 +22,12 @@ namespace ConsoleApp1
                 using (var client = new TcpClient("127.0.0.1", 7000))
                 {
                     // Create SSL stream object
-                    var sslStream = new SslStream(
-                        new MyCorruptingStreamWrapper(client.GetStream(), corruptData ? 1000 : null), 
-                        false, 
-                        (s, c, cc, ss) => true, null)
-                    { 
-                        ReadTimeout = 50 
-                    };
+                    var sslStream = new SslStream(new MyCorruptingStreamWrapper(client.GetStream(), corruptData ? 1000 : null));
 
                     // Create SSL connection with server
                     try
                     {
-                        sslStream.AuthenticateAsClient("127.0.0.1");
+                        sslStream.AuthenticateAsClient("localhost");
                     }
                     catch (AuthenticationException e)
                     {
@@ -91,13 +85,13 @@ namespace ConsoleApp1
 
         private void WriteMessage(SslStream sslStream, string message)
         {
-            message.Split('\n').ToList().ForEach(line =>
-            {
-                var trimmedLine = line.Trim('\r', '\n');
-                Tracer.Verbose($"Sending ({trimmedLine.Length}): {trimmedLine}");
-                sslStream.Write(Encoding.UTF8.GetBytes($"{trimmedLine}\r\n"));
-                Thread.Sleep(1);
-            });
+            //sslStream.Write(Encoding.UTF8.GetBytes(message));
+             message.Split('\n').ToList().ForEach(line => {
+                 var trimmedLine = line.Trim('\r', '\n');
+                 Tracer.Verbose($"Sending ({trimmedLine.Length}): {trimmedLine}");
+                 sslStream.Write(Encoding.UTF8.GetBytes($"{trimmedLine}\r\n"));
+                 Thread.Sleep(1);
+             });
             sslStream.Flush();
 
         }
@@ -111,17 +105,13 @@ namespace ConsoleApp1
             try
             {
                 int bytes = sslStream.Read(buffer, 0, buffer.Length);
-                while (bytes > 0)
-                {
-                    char[] chars = new char[decoder.GetCharCount(buffer, 0, bytes)];
-                    decoder.GetChars(buffer, 0, bytes, chars, 0);
-                    messageData.Append(chars);
-
-                    bytes = sslStream.Read(buffer, 0, buffer.Length);
-                };
+                char[] chars = new char[decoder.GetCharCount(buffer, 0, bytes)];
+                decoder.GetChars(buffer, 0, bytes, chars, 0);
+                messageData.Append(chars);
             }
             catch (IOException x)
             {
+                Tracer.Verbose($"Read exception {x.Message}");
                 if (x.InnerException is SocketException se && se.SocketErrorCode == SocketError.TimedOut)
                 {
                     Tracer.Verbose($"Ignoring SocketException: {se.Message}");
@@ -164,10 +154,10 @@ namespace ConsoleApp1
             HttpClient httpClient = new HttpClient(new TracingHandler(new HttpClientHandler() { ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true }));
             var request = new HttpRequestMessage(HttpMethod.Post, "https://127.0.0.1:7000/echo");
             request.Content = new StringContent(JsonSerializer.Serialize(_echoPayload), Encoding.UTF8, "application/json");
-            
+
             var response = httpClient.Send(request, HttpCompletionOption.ResponseContentRead);
             Tracer.Info($"Response: {response.StatusCode}");
-            
+
             var content = response.Content.ReadAsStringAsync().Result;
             Tracer.Info($"Content: {content}");
         }
